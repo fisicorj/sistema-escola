@@ -1,0 +1,23 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn.lock
+pnpm-lock.yaml
+
+# React
+build/
+.cache/
+.DS_Store
+
+# Firebase
+.firebase/
+.firebaserc
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Functions
+functions/node_modules/
+functions/.runtimeconfig.json

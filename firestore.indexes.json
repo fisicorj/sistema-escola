@@ -1,0 +1,29 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "notas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "matriculaId", "order": "ASCENDING" },
+        { "fieldPath": "tipoAvaliacaoId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "matriculas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "disciplinaId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tiposAvaliacao",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "disciplinaId", "order": "ASCENDING" },
+        { "fieldPath": "nome", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

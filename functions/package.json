@@ -1,0 +1,13 @@
+{
+  "name": "functions",
+  "main": "index.js",
+  "engines": { "node": "20" },
+  "scripts": {
+    "build": "echo \"(noop)\"",
+    "deploy": "firebase deploy --only functions"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.6.0",
+    "firebase-functions": "^6.0.0"
+  }
+}
