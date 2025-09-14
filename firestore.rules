@@ -2,7 +2,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helpers
+    // ===== Helpers =====
     function isSignedIn() {
       return request.auth != null;
     }
@@ -28,61 +28,92 @@ service cloud.firestore {
     }
 
     /* ===========================
-   COUNTERS (sequenciamento)
-   /counters/{counterId}
-   =========================== */
+       COUNTERS (sequenciamento)
+       /counters/{counterId}
+       =========================== */
     match /counters/{counterId} {
-      // leitura e escrita apenas para usuários autenticados (ou admin)
       allow read: if isAdmin() || isSignedIn();
-      // se quiser, pode restringir a escrita só ao doc "alunos"
+      // restringe escrita ao doc "alunos" (geração de matrícula) ou admin
       allow write: if isAdmin() || (isSignedIn() && counterId == "alunos");
     }
-
 
     /* ===========================
        DISCIPLINAS
        /disciplinas/{disciplinaId}
        =========================== */
     match /disciplinas/{disciplinaId} {
-      // Qualquer autenticado pode ler
+      // leitura para autenticados
       allow read: if isSignedIn();
 
-      // CREATE: usa request.resource (doc ainda não existe)
+      // create: professor que está criando vira dono
       allow create: if isAdmin() ||
-        (isSignedIn() &&
-         request.resource.data.professorId == request.auth.uid);
+        (isSignedIn() && request.resource.data.professorId == request.auth.uid);
 
-      // UPDATE/DELETE: usa resource (doc existente)
+      // update/delete: somente admin ou professor dono
       allow update, delete: if isAdmin() ||
-        (isSignedIn() &&
-         resource.data.professorId == request.auth.uid);
+        (isSignedIn() && resource.data.professorId == request.auth.uid);
     }
 
     /* ===========================
        ALUNOS
        /alunos/{alunoId}
-       (Você pode apertar depois; por ora qualquer autenticado)
        =========================== */
     match /alunos/{alunoId} {
+      // por ora: qualquer autenticado pode ler/escrever aluno
+      // (se quiser, depois apertamos isso)
       allow read, write: if isAdmin() || isSignedIn();
     }
 
+    /* ===========================
+       SEMESTRES
+       /semestres/{semId}
+       =========================== */
+    match /semestres/{semId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    /* ===========================
+       TURMAS
+       /turmas/{turmaId}
+       =========================== */
+    match /turmas/{turmaId} {
+      allow read: if isSignedIn();
+      // por ora, só admin escreve (podemos delegar depois)
+      allow create, update, delete: if isAdmin();
+    }
+
+    /* ===========================
+       MATRÍCULAS DE TURMA (unicidade por ID)
+       /matriculasTurma/{id}
+       =========================== */
+    match /matriculasTurma/{id} {
+      allow read: if isSignedIn();
+
+      // cria somente se o ID for exatamente turmaId_alunoId
+      allow create: if isSignedIn()
+        && id == (request.resource.data.turmaId + "_" + request.resource.data.alunoId)
+        && request.resource.data.status in ["ativo", "cancelado"];
+
+      // atualização/remoção: admin (podemos abrir depois para coordenadores)
+      allow update, delete: if isAdmin();
+    }
 
     /* ===========================
        TIPOS DE AVALIAÇÃO
        /tiposAvaliacao/{tipoId}
        =========================== */
     match /tiposAvaliacao/{tipoId} {
-      // Leitura liberada para autenticados
-      allow read: if isAdmin() || isSignedIn();
+      // leitura liberada para autenticados
+      allow read: if isSignedIn();
 
-      // CREATE: professor da disciplina (ou admin)
+      // create: professor da disciplina (ou admin)
       allow create: if isAdmin() ||
         (isSignedIn() &&
          request.resource.data.disciplinaId is string &&
          isProfessorDaDisciplina(request.resource.data.disciplinaId));
 
-      // UPDATE/DELETE: professor dono (ou admin)
+      // update/delete: professor dono (ou admin)
       allow update, delete: if isAdmin() ||
         (isSignedIn() &&
          resource.data.disciplinaId is string &&
@@ -90,9 +121,8 @@ service cloud.firestore {
     }
 
     /* ===========================
-       MATRÍCULAS
+       MATRÍCULAS (por disciplina)
        /matriculas/{matriculaId}
-       (Simples; pode apertar depois)
        =========================== */
     match /matriculas/{matriculaId} {
       allow read, write: if isAdmin() || isSignedIn();
@@ -101,11 +131,9 @@ service cloud.firestore {
     /* ===========================
        NOTAS
        /notas/{notaId}
-       (Simples; pode apertar depois)
        =========================== */
     match /notas/{notaId} {
       allow read, write: if isAdmin() || isSignedIn();
     }
   }
 }
-

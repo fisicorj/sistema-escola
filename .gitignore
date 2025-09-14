@@ -17,6 +17,7 @@ build/
 .env
 .env.local
 .env.*.local
+.env.example
 
 # Functions
 functions/node_modules/

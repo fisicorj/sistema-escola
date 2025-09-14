@@ -48,6 +48,30 @@
         { "fieldPath": "disciplinaId", "order": "ASCENDING" },
         { "fieldPath": "alunoId", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "turmas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "semestreId", "order": "ASCENDING" },
+        { "fieldPath": "nome", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "semestres",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ano", "order": "DESCENDING" },
+        { "fieldPath": "semestre", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "matriculasTurma",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "turmaId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
