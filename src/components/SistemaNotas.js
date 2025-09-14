@@ -3,12 +3,13 @@ import { useFirebaseAuth, useFirestore } from '../hooks/useFirebase';
 import TiposAvaliacaoModal from './TiposAvaliacaoModal';
 import NotasModal from './NotasModal';
 import DisciplinaModal from './DisciplinaModal';
+import AlunoModal from './AlunoModal';
 
 export default function SistemaNotas() {
   const { user, logout } = useFirebaseAuth();
   const {
     listarDisciplinas, adicionarDisciplina, atualizarDisciplina, deletarDisciplinaCascade,
-    listarAlunos, adicionarAluno,
+    listarAlunos, adicionarAluno, atualizarAluno,
     adicionarTipoAvaliacao, atualizarTipoAvaliacao, deletarTipoAvaliacao, listarTiposAvaliacao,
     matricularAluno, listarAlunosDisciplina,
     adicionarNota, obterRelatorioNotas
@@ -22,6 +23,8 @@ export default function SistemaNotas() {
   const [abrirTipos, setAbrirTipos] = useState(false);
   const [abrirNotas, setAbrirNotas] = useState(false);
   const [abrirEditarDisc, setAbrirEditarDisc] = useState(false);
+  const [abrirAluno, setAbrirAluno] = useState(false);
+  const [alunoEditando, setAlunoEditando] = useState(null);
   const [alunoSelecionado, setAlunoSelecionado] = useState(null);
   const [relatorio, setRelatorio] = useState([]);
   const [tipoEditando, setTipoEditando] = useState(null);
@@ -90,20 +93,38 @@ export default function SistemaNotas() {
     setRelatorio([]);
   };
 
-  const cadastrarAluno = async () => {
-    const nome = prompt('Nome do aluno:');
-    if (!nome) return;
-    const res = await adicionarAluno({ nome });
-    alert(`Aluno cadastrado!\nMatrícula gerada: ${res.matricula}`);
-    const as = await listarAlunos();
-    setAlunos(as);
+  const abrirCriarAluno = () => { setAlunoEditando(null); setAbrirAluno(true); };
+  const abrirEditarAluno = (a) => { setAlunoEditando(a); setAbrirAluno(true); };
+
+  const salvarAluno = async ({ nome, email }) => {
+    if (alunoEditando) {
+      await atualizarAluno(alunoEditando.id, { nome, email });
+      setAlunoEditando(null);
+      const as = await listarAlunos();
+      setAlunos(as);
+      alert('Aluno atualizado!');
+    } else {
+      const res = await adicionarAluno({ nome, email });
+      const as = await listarAlunos();
+      setAlunos(as);
+      alert(`Aluno cadastrado!\nMatrícula gerada: ${res.matricula}`);
+    }
   };
 
   const matricular = async (alunoId) => {
     if (!selecionada) return;
-    await matricularAluno(alunoId, selecionada.id);
-    const ads = await listarAlunosDisciplina(selecionada.id);
-    setAlunosDisc(ads);
+    try {
+      await matricularAluno(alunoId, selecionada.id);
+      const ads = await listarAlunosDisciplina(selecionada.id);
+      setAlunosDisc(ads);
+    } catch (e) {
+      if (e?.code === 'duplicate-enrollment') {
+        alert('Este aluno já está matriculado nesta disciplina.');
+      } else {
+        console.error(e);
+        alert('Não foi possível matricular. Tente novamente.');
+      }
+    }
   };
 
   const abrirCriarTipo = () => { setTipoEditando(null); setAbrirTipos(true); };
@@ -182,13 +203,23 @@ export default function SistemaNotas() {
 
           <hr />
 
-          <h3>Alunos (Cadastro)</h3>
-          <button onClick={cadastrarAluno} style={{ marginBottom: 8 }}>+ Novo aluno</button>
+          <h3>Alunos</h3>
+          <button onClick={abrirCriarAluno} style={{ marginBottom: 8 }}>+ Novo aluno</button>
           <ul style={{ listStyle: 'none', paddingLeft: 0, maxHeight: 240, overflow: 'auto' }}>
             {alunos.map(a => (
-              <li key={a.id} style={{ padding: 6, display: 'flex', justifyContent: 'space-between' }}>
-                <span>{a.nome}</span>
-                <button onClick={() => matricular(a.id)} disabled={!selecionada}>Matricular</button>
+              <li key={a.id} style={{ padding: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div>{a.nome}</div>
+                    <div style={{ fontSize: 12, color: '#666' }}>
+                      Matrícula: {a.matricula} {a.email ? `• ${a.email}` : ''}
+                    </div>
+                  </div>
+                  <div>
+                    <button onClick={() => matricular(a.id)} disabled={!selecionada}>Matricular</button>
+                    <button onClick={() => abrirEditarAluno(a)} style={{ marginLeft: 8 }}>Editar</button>
+                  </div>
+                </div>
               </li>
             ))}
           </ul>
@@ -201,8 +232,10 @@ export default function SistemaNotas() {
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
                 <h3 style={{ margin: 0 }}>{selecionada.nome}</h3>
                 <button onClick={abrirEdicaoDisciplina}>Editar disciplina</button>
-                <button onClick={abrirCriarTipo}>+ Tipo de avaliação</button>
-                <button onClick={gerarRelatorio}>Gerar relatório</button>
+                <button onClick={async () => { const r = await obterRelatorioNotas(selecionada.id); setRelatorio(r); }}>
+                  Gerar relatório
+                </button>
+                <button onClick={() => { setTipoEditando(null); setAbrirTipos(true); }}>+ Tipo de avaliação</button>
                 <button onClick={excluirDisciplina} style={{ marginLeft: 'auto', color: 'crimson' }}>
                   Excluir disciplina
                 </button>
@@ -213,7 +246,7 @@ export default function SistemaNotas() {
                 {tipos.map(t => (
                   <li key={t.id} style={{ marginBottom: 6 }}>
                     {t.nome} — peso {Math.round(t.peso * 100)}%
-                    <button onClick={() => abrirEditarTipo(t)} style={{ marginLeft: 8 }}>Editar</button>
+                    <button onClick={() => { setTipoEditando(t); setAbrirTipos(true); }} style={{ marginLeft: 8 }}>Editar</button>
                     <button onClick={() => excluirTipo(t)} style={{ marginLeft: 4, color: 'crimson' }}>Excluir</button>
                   </li>
                 ))}
@@ -226,6 +259,7 @@ export default function SistemaNotas() {
                   <tr style={{ background: '#f5f5f5' }}>
                     <th align="left">Aluno</th>
                     <th align="left">Matrícula</th>
+                    <th align="left">E-mail</th>
                     <th align="left">Média</th>
                     <th align="left">Status</th>
                     <th align="left">Ações</th>
@@ -236,6 +270,7 @@ export default function SistemaNotas() {
                     <tr key={a.matriculaId} style={{ borderTop: '1px solid #eee' }}>
                       <td>{a.nome}</td>
                       <td>{a.matricula || '-'}</td>
+                      <td>{a.email || '-'}</td>
                       <td>{a.mediaFinal != null ? a.mediaFinal.toFixed(2) : '-'}</td>
                       <td>{a.status || '-'}</td>
                       <td>
@@ -246,7 +281,7 @@ export default function SistemaNotas() {
                     </tr>
                   ))}
                   {alunosDisc.length === 0 && (
-                    <tr><td colSpan="5">Ninguém matriculado.</td></tr>
+                    <tr><td colSpan="6">Ninguém matriculado.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -277,10 +312,25 @@ export default function SistemaNotas() {
                 </table>
               )}
 
+              {/* Modais */}
               <TiposAvaliacaoModal
                 aberto={abrirTipos}
                 onClose={() => { setAbrirTipos(false); setTipoEditando(null); }}
-                onSalvar={salvarTipo}
+                onSalvar={(dados) => {
+                  if (!selecionada) return;
+                  if (tipoEditando) {
+                    atualizarTipoAvaliacao(tipoEditando.id, dados).then(async () => {
+                      setTipoEditando(null);
+                      const ts = await listarTiposAvaliacao(selecionada.id);
+                      setTipos(ts);
+                    });
+                  } else {
+                    adicionarTipoAvaliacao(selecionada.id, dados).then(async () => {
+                      const ts = await listarTiposAvaliacao(selecionada.id);
+                      setTipos(ts);
+                    });
+                  }
+                }}
                 inicial={tipoEditando}
               />
 
@@ -304,6 +354,14 @@ export default function SistemaNotas() {
           )}
         </main>
       </section>
+
+      {/* Modal de aluno (criar/editar) */}
+      <AlunoModal
+        aberto={abrirAluno}
+        onClose={() => { setAbrirAluno(false); setAlunoEditando(null); }}
+        inicial={alunoEditando}
+        onSalvar={salvarAluno}
+      />
     </div>
   );
 }

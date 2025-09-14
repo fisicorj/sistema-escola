@@ -28,6 +28,18 @@ service cloud.firestore {
     }
 
     /* ===========================
+   COUNTERS (sequenciamento)
+   /counters/{counterId}
+   =========================== */
+    match /counters/{counterId} {
+      // leitura e escrita apenas para usuários autenticados (ou admin)
+      allow read: if isAdmin() || isSignedIn();
+      // se quiser, pode restringir a escrita só ao doc "alunos"
+      allow write: if isAdmin() || (isSignedIn() && counterId == "alunos");
+    }
+
+
+    /* ===========================
        DISCIPLINAS
        /disciplinas/{disciplinaId}
        =========================== */
@@ -54,6 +66,7 @@ service cloud.firestore {
     match /alunos/{alunoId} {
       allow read, write: if isAdmin() || isSignedIn();
     }
+
 
     /* ===========================
        TIPOS DE AVALIAÇÃO

@@ -163,7 +163,7 @@ export const useFirestore = () => {
    * ALUNOS
    * ====================== */
   /** Gera matrícula sequencial por ano (YYYY + 5 dígitos) e cria o aluno */
-  const adicionarAluno = async ({ nome, ...rest }) => {
+  const adicionarAluno = async ({ nome, email }) => {
     // 1) incrementa contador com transação (coleção counters/alunos)
     const counterRef = doc(db, 'counters', 'alunos');
     const matricula = await runTransaction(db, async (tx) => {
@@ -180,11 +180,20 @@ export const useFirestore = () => {
     // 2) cria aluno com matrícula gerada
     const docRef = await addDoc(collection(db, 'alunos'), {
       nome: (nome || '').trim(),
+      email: (email || '').trim() || null, // opcional
       matricula,
-      ...rest,
       createdAt: serverTimestamp()
     });
     return { id: docRef.id, matricula };
+  };
+
+  /** Edita dados do aluno (nome/email). Não altera matrícula. */
+  const atualizarAluno = async (alunoId, { nome, email }) => {
+    await updateDoc(doc(db, 'alunos', alunoId), {
+      ...(nome != null ? { nome: String(nome).trim() } : {}),
+      ...(email != null ? { email: String(email).trim() || null } : {}),
+      updatedAt: serverTimestamp()
+    });
   };
 
   const listarAlunos = async () => {
@@ -254,7 +263,56 @@ export const useFirestore = () => {
   /* ======================
    * MATRÍCULAS
    * ====================== */
+  /** Impede matricular o mesmo aluno duas vezes na mesma disciplina */
   const matricularAluno = async (alunoId, disciplinaId) => {
+    // verifica duplicidade (preferindo consultar com 3 filtros)
+    try {
+      const q = query(
+        collection(db, 'matriculas'),
+        where('disciplinaId', '==', disciplinaId),
+        where('alunoId', '==', alunoId),
+        where('status', '==', 'ativo')
+      );
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const err = new Error('duplicate-enrollment');
+        err.code = 'duplicate-enrollment';
+        throw err;
+      }
+    } catch (e) {
+      if (e?.code === 'duplicate-enrollment') throw e;
+      if (!isIndexIssue(e)) throw e;
+
+      // fallback 1: disc+alunoId (dois filtros)
+      try {
+        const q2 = query(
+          collection(db, 'matriculas'),
+          where('disciplinaId', '==', disciplinaId),
+          where('alunoId', '==', alunoId)
+        );
+        const snap2 = await getDocs(q2);
+        if (snap2.docs.some(d => (d.data()?.status || 'ativo') === 'ativo')) {
+          const err = new Error('duplicate-enrollment');
+          err.code = 'duplicate-enrollment';
+          throw err;
+        }
+      } catch (e2) {
+        if (!isIndexIssue(e2)) throw e2;
+
+        // fallback 2: só por disciplina, filtrando no cliente
+        const q3 = query(collection(db, 'matriculas'), where('disciplinaId', '==', disciplinaId));
+        const snap3 = await getDocs(q3);
+        if (snap3.docs.some(d =>
+          d.data()?.alunoId === alunoId && (d.data()?.status || 'ativo') === 'ativo'
+        )) {
+          const err = new Error('duplicate-enrollment');
+          err.code = 'duplicate-enrollment';
+          throw err;
+        }
+      }
+    }
+
+    // se passou, cria a matrícula
     const docRef = await addDoc(collection(db, 'matriculas'), {
       alunoId,
       disciplinaId,
@@ -359,6 +417,7 @@ export const useFirestore = () => {
     deletarDisciplinaCascade,
     // Alunos
     adicionarAluno,
+    atualizarAluno,
     listarAlunos,
     // Tipos de avaliação
     adicionarTipoAvaliacao,
