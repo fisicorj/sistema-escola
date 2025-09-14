@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 
 export default function TiposAvaliacaoModal({ aberto, onClose, onSalvar, inicial }) {
-  // se 'inicial' vier, é modo edição
   const editMode = Boolean(inicial);
   const [nome, setNome] = useState('');
   const [peso, setPeso] = useState(0.0);

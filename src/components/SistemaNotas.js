@@ -26,7 +26,7 @@ export default function SistemaNotas() {
   const [relatorio, setRelatorio] = useState([]);
   const [tipoEditando, setTipoEditando] = useState(null);
 
-  // Carrega disciplinas e cadastro de alunos do professor logado
+  // Carrega disciplinas e alunos do professor logado
   useEffect(() => {
     if (!user) return;
     (async () => {
@@ -37,7 +37,7 @@ export default function SistemaNotas() {
     })();
   }, [user]); // eslint-disable-line
 
-  // Ao selecionar disciplina, carrega tipos e alunos matriculados
+  // Quando seleciona uma disciplina, carrega tipos e alunos matriculados
   useEffect(() => {
     if (!selecionada) { setTipos([]); setAlunosDisc([]); return; }
     (async () => {
@@ -93,8 +93,8 @@ export default function SistemaNotas() {
   const cadastrarAluno = async () => {
     const nome = prompt('Nome do aluno:');
     if (!nome) return;
-    const matricula = prompt('Matrícula:') || '';
-    await adicionarAluno({ nome, matricula });
+    const res = await adicionarAluno({ nome });
+    alert(`Aluno cadastrado!\nMatrícula gerada: ${res.matricula}`);
     const as = await listarAlunos();
     setAlunos(as);
   };

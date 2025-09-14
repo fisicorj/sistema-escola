@@ -12,17 +12,17 @@ import {
   getDoc,
   doc,
   updateDoc,
-  deleteDoc,
   query,
   where,
   orderBy,
   serverTimestamp,
-  writeBatch
+  writeBatch,
+  runTransaction
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { auth, db, functions } from '../firebase/config';
 
-/** Detecta erros de índice (ainda construindo ou ausente) para aplicar fallback */
+/** Detecta erros de índice (ainda construindo/ausente) para aplicar fallback */
 const isIndexIssue = (e) =>
   e?.code === 'failed-precondition' ||
   (typeof e?.message === 'string' && e.message.toLowerCase().includes('index'));
@@ -112,48 +112,48 @@ export const useFirestore = () => {
     });
   };
 
-  /** Deleta disciplina e documentos relacionados (tipos, matrículas, notas) em lotes */
+  /** Deleta disciplina e documentos relacionados (tipos, matrículas e notas) */
   const deletarDisciplinaCascade = async (disciplinaId) => {
-    // 1) Buscar tipos da disciplina
+    // 1) Tipos da disciplina
     const tiposSnap = await getDocs(
       query(collection(db, 'tiposAvaliacao'), where('disciplinaId', '==', disciplinaId))
     );
     const tipoIds = tiposSnap.docs.map(d => d.id);
 
-    // 2) Buscar matrículas da disciplina
+    // 2) Matrículas da disciplina
     const matsSnap = await getDocs(
       query(collection(db, 'matriculas'), where('disciplinaId', '==', disciplinaId))
     );
 
-    // 3) Apagar notas das matrículas
-    const notaDocRefs = [];
+    // 3) Notas por matrícula e por tipo (deduplicadas)
+    const notaIds = new Set();
+
     for (const m of matsSnap.docs) {
       const notasSnap = await getDocs(
         query(collection(db, 'notas'), where('matriculaId', '==', m.id))
       );
-      notasSnap.docs.forEach(n => notaDocRefs.push(doc(db, 'notas', n.id)));
+      notasSnap.docs.forEach(n => notaIds.add(n.id));
     }
 
-    // 4) Também apagar notas por tipo (por segurança)
     for (const tipoId of tipoIds) {
       const notasPorTipo = await getDocs(
         query(collection(db, 'notas'), where('tipoAvaliacaoId', '==', tipoId))
       );
-      notasPorTipo.docs.forEach(n => notaDocRefs.push(doc(db, 'notas', n.id)));
+      notasPorTipo.docs.forEach(n => notaIds.add(n.id));
     }
 
-    // 5) Montar refs pra deletar: notas, matrículas, tipos, depois a disciplina
-    const refsParaDeletar = [
-      ...notaDocRefs,
+    // 4) Monta refs pra deletar: notas, matrículas, tipos, depois a disciplina
+    const refs = [
+      ...Array.from(notaIds).map(id => doc(db, 'notas', id)),
       ...matsSnap.docs.map(m => doc(db, 'matriculas', m.id)),
       ...tiposSnap.docs.map(t => doc(db, 'tiposAvaliacao', t.id)),
       doc(db, 'disciplinas', disciplinaId)
     ];
 
-    // 6) Deletar em lotes (máx 450 por batch)
-    while (refsParaDeletar.length) {
+    // 5) Deleta em lotes (máx ~500 por batch)
+    while (refs.length) {
       const batch = writeBatch(db);
-      const slice = refsParaDeletar.splice(0, 450);
+      const slice = refs.splice(0, 450);
       slice.forEach(ref => batch.delete(ref));
       await batch.commit();
     }
@@ -162,12 +162,29 @@ export const useFirestore = () => {
   /* ======================
    * ALUNOS
    * ====================== */
-  const adicionarAluno = async (alunoData) => {
+  /** Gera matrícula sequencial por ano (YYYY + 5 dígitos) e cria o aluno */
+  const adicionarAluno = async ({ nome, ...rest }) => {
+    // 1) incrementa contador com transação (coleção counters/alunos)
+    const counterRef = doc(db, 'counters', 'alunos');
+    const matricula = await runTransaction(db, async (tx) => {
+      const snap = await tx.get(counterRef);
+      const year = new Date().getFullYear();
+      let seq = 1;
+      if (snap.exists() && snap.data()?.year === year) {
+        seq = (snap.data()?.seq || 0) + 1;
+      }
+      tx.set(counterRef, { year, seq });
+      return `${year}${String(seq).padStart(5, '0')}`; // ex.: 202500001
+    });
+
+    // 2) cria aluno com matrícula gerada
     const docRef = await addDoc(collection(db, 'alunos'), {
-      ...alunoData,
+      nome: (nome || '').trim(),
+      matricula,
+      ...rest,
       createdAt: serverTimestamp()
     });
-    return docRef.id;
+    return { id: docRef.id, matricula };
   };
 
   const listarAlunos = async () => {
@@ -195,9 +212,8 @@ export const useFirestore = () => {
     });
   };
 
-  /** Deleta um tipo e apaga notas que referenciam esse tipo */
+  /** Deleta um tipo e as notas que referenciam esse tipo */
   const deletarTipoAvaliacao = async (tipoId) => {
-    // apagar notas que usam esse tipo
     const notasSnap = await getDocs(
       query(collection(db, 'notas'), where('tipoAvaliacaoId', '==', tipoId))
     );
@@ -256,10 +272,10 @@ export const useFirestore = () => {
         where('disciplinaId', '==', disciplinaId),
         where('status', '==', 'ativo')
       );
-      const matriculasSnapshot = await getDocs(q);
+      const snap = await getDocs(q);
 
       const alunos = [];
-      for (const m of matriculasSnapshot.docs) {
+      for (const m of snap.docs) {
         const matricula = m.data();
         const alunoSnap = await getDoc(doc(db, 'alunos', matricula.alunoId));
         if (alunoSnap.exists()) {
@@ -276,6 +292,7 @@ export const useFirestore = () => {
       return alunos;
     } catch (e) {
       if (!isIndexIssue(e)) throw e;
+      // fallback: filtra status no cliente
       const q2 = query(
         collection(db, 'matriculas'),
         where('disciplinaId', '==', disciplinaId)
