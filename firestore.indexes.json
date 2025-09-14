@@ -23,6 +23,14 @@
         { "fieldPath": "disciplinaId", "order": "ASCENDING" },
         { "fieldPath": "nome", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "disciplinas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "professorId", "order": "ASCENDING" },
+        { "fieldPath": "nome", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

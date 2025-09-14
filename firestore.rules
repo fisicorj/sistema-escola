@@ -1,41 +1,98 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Usuário só pode ler/escrever seu próprio doc
+
+    // Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Bypass total para administradores (custom claim: admin=true)
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    // Confere se o usuário logado é o professor dono da disciplina
+    function isProfessorDaDisciplina(discId) {
+      return exists(/databases/$(database)/documents/disciplinas/$(discId)) &&
+             get(/databases/$(database)/documents/disciplinas/$(discId)).data.professorId == request.auth.uid;
+    }
+
+    /* ===========================
+       USUÁRIOS (perfil do app)
+       /usuarios/{userId}
+       =========================== */
     match /usuarios/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Admin pode tudo; usuário comum só no próprio doc
+      allow read, write: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
     }
 
-    // Disciplinas
+    /* ===========================
+       DISCIPLINAS
+       /disciplinas/{disciplinaId}
+       =========================== */
     match /disciplinas/{disciplinaId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null &&
-        request.resource.data.professorId == request.auth.uid;
-      allow update, delete: if request.auth != null &&
-        resource.data.professorId == request.auth.uid;
+      // Qualquer autenticado pode ler
+      allow read: if isSignedIn();
+
+      // CREATE: usa request.resource (doc ainda não existe)
+      allow create: if isAdmin() ||
+        (isSignedIn() &&
+         request.resource.data.professorId == request.auth.uid);
+
+      // UPDATE/DELETE: usa resource (doc existente)
+      allow update, delete: if isAdmin() ||
+        (isSignedIn() &&
+         resource.data.professorId == request.auth.uid);
     }
 
-    // Alunos: qualquer usuário autenticado (ajuste depois se quiser)
+    /* ===========================
+       ALUNOS
+       /alunos/{alunoId}
+       (Você pode apertar depois; por ora qualquer autenticado)
+       =========================== */
     match /alunos/{alunoId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAdmin() || isSignedIn();
     }
 
-    // Tipos de avaliação
+    /* ===========================
+       TIPOS DE AVALIAÇÃO
+       /tiposAvaliacao/{tipoId}
+       =========================== */
     match /tiposAvaliacao/{tipoId} {
-      allow read: if request.auth != null;
-      allow create, update, delete: if request.auth != null &&
-        exists(/databases/$(database)/documents/disciplinas/$(request.resource.data.disciplinaId)) &&
-        get(/databases/$(database)/documents/disciplinas/$(request.resource.data.disciplinaId)).data.professorId == request.auth.uid;
+      // Leitura liberada para autenticados
+      allow read: if isAdmin() || isSignedIn();
+
+      // CREATE: professor da disciplina (ou admin)
+      allow create: if isAdmin() ||
+        (isSignedIn() &&
+         request.resource.data.disciplinaId is string &&
+         isProfessorDaDisciplina(request.resource.data.disciplinaId));
+
+      // UPDATE/DELETE: professor dono (ou admin)
+      allow update, delete: if isAdmin() ||
+        (isSignedIn() &&
+         resource.data.disciplinaId is string &&
+         isProfessorDaDisciplina(resource.data.disciplinaId));
     }
 
-    // Matrículas
+    /* ===========================
+       MATRÍCULAS
+       /matriculas/{matriculaId}
+       (Simples; pode apertar depois)
+       =========================== */
     match /matriculas/{matriculaId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAdmin() || isSignedIn();
     }
 
-    // Notas
+    /* ===========================
+       NOTAS
+       /notas/{notaId}
+       (Simples; pode apertar depois)
+       =========================== */
     match /notas/{notaId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAdmin() || isSignedIn();
     }
   }
 }
+

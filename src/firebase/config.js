@@ -4,19 +4,17 @@ import { getFirestore } from 'firebase/firestore';
 import { getFunctions } from 'firebase/functions';
 
 const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.REACT_APP_FIREBASE_APP_ID
+  apiKey: "AIzaSyBd9ZDOCJymS0dANGwVrlVqy1dxALiUopM",
+  authDomain: "sistema-notas-99217.firebaseapp.com",
+  projectId: "sistema-notas-99217",
+  storageBucket: "sistema-notas-99217.appspot.com", // <- tem que ser .appspot.com
+  messagingSenderId: "136826957284",
+  appId: "1:136826957284:web:ec9ee2431c0124589c6bf1",
+  measurementId: "G-G0104CED3S"
 };
 
 const app = initializeApp(firebaseConfig);
-
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-// Região São Paulo para latência baixa
 export const functions = getFunctions(app, 'southamerica-east1');
-
 export default app;

@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 
-export default function TiposAvaliacaoModal({ aberto, onClose, onSalvar }) {
+export default function TiposAvaliacaoModal({ aberto, onClose, onSalvar, inicial }) {
+  // se 'inicial' vier, é modo edição
+  const editMode = Boolean(inicial);
   const [nome, setNome] = useState('');
   const [peso, setPeso] = useState(0.0);
 
   useEffect(() => {
     if (aberto) {
-      setNome('');
-      setPeso(0.0);
+      setNome(inicial?.nome ?? '');
+      setPeso(inicial?.peso ?? 0.0);
     }
-  }, [aberto]);
+  }, [aberto, inicial]);
 
   if (!aberto) return null;
 
@@ -27,7 +29,7 @@ export default function TiposAvaliacaoModal({ aberto, onClose, onSalvar }) {
   return (
     <div style={overlay}>
       <div style={modal}>
-        <h3>Novo Tipo de Avaliação</h3>
+        <h3>{editMode ? 'Editar Tipo de Avaliação' : 'Novo Tipo de Avaliação'}</h3>
         <div style={row}>
           <label>Nome</label>
           <input value={nome} onChange={e=>setNome(e.target.value)} />
@@ -37,7 +39,7 @@ export default function TiposAvaliacaoModal({ aberto, onClose, onSalvar }) {
           <input value={peso} onChange={e=>setPeso(e.target.value)} />
         </div>
         <div style={{ marginTop: 12 }}>
-          <button onClick={salvar}>Salvar</button>
+          <button onClick={salvar}>{editMode ? 'Salvar alterações' : 'Salvar'}</button>
           <button onClick={onClose} style={{ marginLeft: 8 }}>Cancelar</button>
         </div>
       </div>
@@ -51,4 +53,3 @@ const overlay = {
 };
 const modal = { background: '#fff', padding: 16, borderRadius: 8, minWidth: 360 };
 const row = { display: 'flex', flexDirection: 'column', marginBottom: 8 };
- 
